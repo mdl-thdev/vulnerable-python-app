@@ -11,7 +11,10 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/mdl-thdev/vulnerable-python-app.git']]
+                ])
             }
         }
 
@@ -42,6 +45,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                echo "Building Docker image..."
                 docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
                 docker tag $DOCKER_IMAGE:$DOCKER_TAG $DOCKER_IMAGE:latest
                 '''
@@ -51,6 +55,7 @@ pipeline {
         stage('Run Unit Tests') {
             steps {
                 sh '''
+                echo "Running tests..."
                 docker run --rm $DOCKER_IMAGE:$DOCKER_TAG python test_app.py
                 '''
             }
@@ -91,6 +96,8 @@ pipeline {
         stage('Push to Snyk Dashboard') {
             steps {
                 sh '''
+                echo "Pushing results to Snyk..."
+
                 snyk monitor \
                     --file=requirements.txt \
                     --package-manager=pip \
@@ -109,6 +116,7 @@ pipeline {
     post {
         always {
             sh '''
+            echo "Cleaning up Docker image..."
             docker rmi $DOCKER_IMAGE:$DOCKER_TAG || true
             '''
         }
