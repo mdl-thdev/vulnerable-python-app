@@ -4,7 +4,7 @@ pipeline {
     environment {
         SNYK_TOKEN = credentials('snyk-token')
         DOCKER_IMAGE = 'vulnerable-python-app'
-        DOCKER_TAG = "$BUILD_NUMBER"
+        DOCKER_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -18,7 +18,7 @@ pipeline {
         stage('Setup Snyk') {
             steps {
                 sh '''
-                echo "Installing Snyk via npm..."
+                echo "Installing Snyk..."
 
                 npm install -g snyk
 
@@ -33,8 +33,8 @@ pipeline {
             steps {
                 sh '''
                 echo "Checking Docker..."
-                docker version || true
-                which docker || true
+                docker version
+                which docker
                 '''
             }
         }
@@ -42,7 +42,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                echo "Building Docker image..."
                 docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
                 docker tag $DOCKER_IMAGE:$DOCKER_TAG $DOCKER_IMAGE:latest
                 '''
@@ -57,7 +56,7 @@ pipeline {
             }
         }
 
-        stage('Snyk Security Scan - Dependencies') {
+        stage('Snyk Dependency Scan') {
             steps {
                 sh '''
                 mkdir -p reports
@@ -70,7 +69,7 @@ pipeline {
             }
         }
 
-        stage('Snyk Security Scan - Docker Image') {
+        stage('Snyk Container Scan') {
             steps {
                 sh '''
                 snyk container test \
@@ -80,7 +79,7 @@ pipeline {
             }
         }
 
-        stage('Snyk Code Analysis') {
+        stage('Snyk Code Scan') {
             steps {
                 sh '''
                 snyk code test \
@@ -89,38 +88,18 @@ pipeline {
             }
         }
 
-        stage('Generate Security Report') {
+        stage('Push to Snyk Dashboard') {
             steps {
                 sh '''
-                echo "Security Summary" > reports/summary.txt
-                date >> reports/summary.txt
-                echo "Image: $DOCKER_IMAGE:$DOCKER_TAG" >> reports/summary.txt
-                cat reports/summary.txt
-                '''
-            }
-        }
-
-        stage('Archive Reports') {
-            steps {
-                archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-            }
-        }
-
-        stage('Snyk Monitor - Push to Dashboard') {
-            steps {
-                sh '''
-                echo "Pushing to Snyk..."
-
                 snyk monitor \
                     --file=requirements.txt \
                     --package-manager=pip \
-                    --project-name="vulnerable-python-app-deps-$BUILD_NUMBER" \
-                    --remote-repo-url="https://github.com/mdl-thdev/vulnerable-python-app" \
+                    --project-name="deps-$BUILD_NUMBER" \
                     || true
 
                 snyk container monitor \
                     $DOCKER_IMAGE:$DOCKER_TAG \
-                    --project-name="vulnerable-python-app-container-$BUILD_NUMBER" \
+                    --project-name="container-$BUILD_NUMBER" \
                     || true
                 '''
             }
@@ -132,18 +111,6 @@ pipeline {
             sh '''
             docker rmi $DOCKER_IMAGE:$DOCKER_TAG || true
             '''
-        }
-
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-
-        unstable {
-            echo 'Pipeline completed with warnings'
-        }
-
-        failure {
-            echo 'Pipeline failed'
         }
     }
 }
